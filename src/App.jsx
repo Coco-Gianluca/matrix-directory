@@ -2,25 +2,38 @@ import { useState, useEffect } from 'react'
 
 function App() {
   const [search, setSearch] = useState('')
+  const [allRooms, setAllRooms] = useState([])
   const [servers, setServers] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('https://matrix-client.matrix.org/_matrix/client/v3/publicRooms?limit=30')
+    fetch('http://localhost:3001/rooms')
       .then((res) => res.json())
       .then((data) => {
-        setServers(data.chunk || [])
+        const rooms = data.chunk || []
+        setAllRooms(rooms)
+        setServers(rooms)
         setLoading(false)
       })
       .catch(() => setLoading(false))
   }, [])
 
-  const filtered = servers.filter((room) => {
-    const name = (room.name || '').toLowerCase()
-    const topic = (room.topic || '').toLowerCase()
+  const handleSearch = () => {
+    if (!search.trim()) {
+      setServers(allRooms)
+      return
+    }
     const term = search.toLowerCase()
-    return name.includes(term) || topic.includes(term)
-  })
+    const filtered = allRooms.filter((room) =>
+      (room.name || '').toLowerCase().includes(term) ||
+      (room.topic || '').toLowerCase().includes(term)
+    )
+    setServers(filtered)
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') handleSearch()
+  }
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
@@ -39,10 +52,14 @@ function App() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder="z.B. Pokemon, Gaming, Musik..."
             className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
           />
-          <button className="bg-purple-600 hover:bg-purple-700 px-6 py-3 rounded-lg font-medium transition">
+          <button
+            onClick={handleSearch}
+            className="bg-purple-600 hover:bg-purple-700 px-6 py-3 rounded-lg font-medium transition"
+          >
             Suchen
           </button>
         </div>
@@ -54,11 +71,11 @@ function App() {
         </h3>
         {loading ? (
           <p className="text-gray-500 text-center py-12">Räume werden geladen...</p>
-        ) : filtered.length === 0 ? (
+        ) : servers.length === 0 ? (
           <p className="text-gray-500 text-center py-12">Keine Räume gefunden.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map((room) => (
+            {servers.map((room) => (
               <div key={room.room_id} className="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-purple-500 transition">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs bg-purple-900 text-purple-300 px-2 py-1 rounded-full">Matrix</span>
