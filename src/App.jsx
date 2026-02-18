@@ -1,50 +1,8 @@
 import { useState, useEffect } from 'react'
-
-const CATEGORIES = ['Alle', 'Gaming', 'Musik', 'Technik', 'Deutsch', 'Matrix', 'Allgemein']
-
-function mxcToUrl(mxc) {
-  if (!mxc) return null
-  const withoutPrefix = mxc.replace('mxc://', '')
-  return `https://matrix-client.matrix.org/_matrix/media/v3/thumbnail/${withoutPrefix}?width=64&height=64&method=crop`
-}
-
-function RoomCard({ room }) {
-  const imageUrl = mxcToUrl(room.avatar_url)
-  const [imgError, setImgError] = useState(false)
-
-  return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-purple-500 transition">
-      <div className="flex items-center gap-3 mb-3">
-        {imageUrl && !imgError ? (
-          <img
-            src={imageUrl}
-            alt={room.name}
-            onError={() => setImgError(true)}
-            className="w-12 h-12 rounded-full object-cover bg-gray-700"
-          />
-        ) : (
-          <div className="w-12 h-12 rounded-full bg-purple-900 flex items-center justify-center text-purple-300 font-bold text-lg">
-            {(room.name || '?')[0].toUpperCase()}
-          </div>
-        )}
-        <div className="flex-1 min-w-0">
-          <h4 className="font-bold text-lg truncate">{room.name}</h4>
-          <span className="text-xs bg-purple-900 text-purple-300 px-2 py-0.5 rounded-full">{room.category || 'Allgemein'}</span>
-        </div>
-        {room.members && <span className="text-xs text-gray-500 shrink-0">{room.members} 👥</span>}
-      </div>
-      <p className="text-gray-400 text-sm mb-4 line-clamp-2">{room.description || 'Keine Beschreibung vorhanden.'}</p>
-      <a
-        href={`https://matrix.to/#/${room.room_id}`}
-        target="_blank"
-        rel="noreferrer"
-        className="block w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg text-sm font-medium transition text-center"
-      >
-        Beitreten
-      </a>
-    </div>
-  )
-}
+import RoomCard from './components/RoomCard'
+import Navbar from './components/Navbar'
+import SearchBar from './components/SearchBar'
+import RoomForm from './components/RoomForm'
 
 function App() {
   const [search, setSearch] = useState('')
@@ -52,9 +10,6 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState('Alle')
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name: '', description: '', room_id: '', category: '' })
-  const [submitting, setSubmitting] = useState(false)
-  const [success, setSuccess] = useState(false)
 
   const fetchRooms = (searchTerm = '') => {
     setLoading(true)
@@ -79,8 +34,6 @@ function App() {
     fetchRooms(search)
   }
 
-  const handleKeyDown = (e) => { if (e.key === 'Enter') handleSearch() }
-
   const handleCategory = (cat) => {
     setActiveCategory(cat)
     setSearch('')
@@ -91,135 +44,25 @@ function App() {
     }
   }
 
-  const handleSubmit = async () => {
-    if (!form.name || !form.room_id) return
-    setSubmitting(true)
-    try {
-      await fetch('http://localhost:3001/rooms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
-      setSuccess(true)
-      setForm({ name: '', description: '', room_id: '', category: '' })
-      fetchRooms()
-      setTimeout(() => { setSuccess(false); setShowForm(false) }, 2000)
-    } catch (err) {
-      console.error(err)
-    }
-    setSubmitting(false)
-  }
-
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      <nav className="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-purple-400">MatrixRooms</h1>
-        <button
-          onClick={() => setShowForm(true)}
-          className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg text-sm font-medium transition"
-        >
-          Server eintragen
-        </button>
-      </nav>
+
+      <Navbar onAddServer={() => setShowForm(true)} />
 
       {showForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 px-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-8 w-full max-w-md">
-            <h2 className="text-2xl font-bold mb-6">Server eintragen</h2>
-            {success ? (
-              <p className="text-green-400 text-center py-4">✅ Erfolgreich eingetragen!</p>
-            ) : (
-              <>
-                <div className="flex flex-col gap-4">
-                  <input
-                    type="text"
-                    placeholder="Name des Servers *"
-                    value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Matrix Room-ID (z.B. #raum:matrix.org) *"
-                    value={form.room_id}
-                    onChange={(e) => setForm({ ...form, room_id: e.target.value })}
-                    className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
-                  />
-                  <select
-                    value={form.category}
-                    onChange={(e) => setForm({ ...form, category: e.target.value })}
-                    className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500"
-                  >
-                    <option value="">Kategorie wählen...</option>
-                    {CATEGORIES.filter(c => c !== 'Alle' && c !== 'Matrix').map((cat) => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
-                  <textarea
-                    placeholder="Beschreibung"
-                    value={form.description}
-                    onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    rows={3}
-                    className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 resize-none"
-                  />
-                </div>
-                <div className="flex gap-3 mt-6">
-                  <button
-                    onClick={() => setShowForm(false)}
-                    className="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-lg font-medium transition"
-                  >
-                    Abbrechen
-                  </button>
-                  <button
-                    onClick={handleSubmit}
-                    disabled={submitting || !form.name || !form.room_id}
-                    className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 py-3 rounded-lg font-medium transition"
-                  >
-                    {submitting ? 'Wird gespeichert...' : 'Eintragen'}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+        <RoomForm
+          onClose={() => setShowForm(false)}
+          onSuccess={fetchRooms}
+        />
       )}
 
-      <div className="flex flex-col items-center justify-center py-24 px-4">
-        <h2 className="text-4xl font-bold mb-4 text-center">Finde deinen Matrix-Server</h2>
-        <p className="text-gray-400 mb-8 text-center">Durchsuche tausende öffentliche Matrix-Räume</p>
-        <div className="flex w-full max-w-xl gap-2">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="z.B. Pokemon, Gaming, Musik..."
-            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
-          />
-          <button
-            onClick={handleSearch}
-            className="bg-purple-600 hover:bg-purple-700 px-6 py-3 rounded-lg font-medium transition"
-          >
-            Suchen
-          </button>
-        </div>
-
-        <div className="flex flex-wrap justify-center gap-2 mt-6">
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => handleCategory(cat)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition ${
-                activeCategory === cat
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-      </div>
+      <SearchBar
+        search={search}
+        onSearchChange={setSearch}
+        onSearch={handleSearch}
+        activeCategory={activeCategory}
+        onCategoryChange={handleCategory}
+      />
 
       <div className="max-w-5xl mx-auto px-6 pb-16">
         <h3 className="text-xl font-semibold mb-6 text-gray-300">
