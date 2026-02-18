@@ -3,7 +3,18 @@ import pool from '../db.js'
 
 const router = express.Router()
 
-// Alle Räume laden (DB + Matrix API)
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
+
+// Middleware für Admin-Schutz
+function adminAuth(req, res, next) {
+  const password = req.headers['x-admin-password']
+  if (password !== ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Nicht autorisiert' })
+  }
+  next()
+}
+
+// Nur akzeptierte Räume laden (DB + Matrix API)
 router.get('/', async (req, res) => {
   const search = req.query.search || ''
 
@@ -11,11 +22,11 @@ router.get('/', async (req, res) => {
     let dbResult
     if (search) {
       dbResult = await pool.query(
-        `SELECT *, 'custom' as source FROM rooms WHERE name ILIKE $1 OR description ILIKE $1 OR category ILIKE $1 ORDER BY created_at DESC`,
+        `SELECT *, 'custom' as source FROM rooms WHERE status = 'accepted' AND (name ILIKE $1 OR description ILIKE $1 OR category ILIKE $1) ORDER BY created_at DESC`,
         [`%${search}%`]
       )
     } else {
-      dbResult = await pool.query(`SELECT *, 'custom' as source FROM rooms ORDER BY created_at DESC`)
+      dbResult = await pool.query(`SELECT *, 'custom' as source FROM rooms WHERE status = 'accepted' ORDER BY created_at DESC`)
     }
     const dbRooms = dbResult.rows
 
@@ -48,7 +59,7 @@ router.get('/', async (req, res) => {
   }
 })
 
-// Neuen Raum eintragen
+// Neuen Raum eintragen (status = pending)
 router.post('/', async (req, res) => {
   const { name, description, room_id, category } = req.body
   if (!name || !room_id) {
@@ -56,12 +67,42 @@ router.post('/', async (req, res) => {
   }
   try {
     const result = await pool.query(
-      'INSERT INTO rooms (name, description, room_id, category) VALUES ($1, $2, $3, $4) RETURNING *',
-      [name, description, room_id, category]
+      'INSERT INTO rooms (name, description, room_id, category, status) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [name, description, room_id, category, 'pending']
     )
     res.json(result.rows[0])
   } catch (err) {
     res.status(500).json({ error: 'Fehler beim Speichern' })
+  }
+})
+
+// Admin: Alle ausstehenden Anträge laden
+router.get('/admin/pending', adminAuth, async (req, res) => {
+  try {
+    const result = await pool.query(`SELECT * FROM rooms WHERE status = 'pending' ORDER BY created_at DESC`)
+    res.json(result.rows)
+  } catch (err) {
+    res.status(500).json({ error: 'Fehler beim Laden' })
+  }
+})
+
+// Admin: Antrag akzeptieren
+router.patch('/admin/:id/accept', adminAuth, async (req, res) => {
+  try {
+    await pool.query(`UPDATE rooms SET status = 'accepted' WHERE id = $1`, [req.params.id])
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ error: 'Fehler beim Akzeptieren' })
+  }
+})
+
+// Admin: Antrag ablehnen
+router.patch('/admin/:id/reject', adminAuth, async (req, res) => {
+  try {
+    await pool.query(`UPDATE rooms SET status = 'rejected' WHERE id = $1`, [req.params.id])
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ error: 'Fehler beim Ablehnen' })
   }
 })
 
